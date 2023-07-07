@@ -25,3 +25,7 @@ async function main() {
     sleep(3000);
   }
 }
+
+window.onload(() => {
+  main();
+})
