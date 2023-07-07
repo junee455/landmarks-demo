@@ -1,5 +1,25 @@
 <head><script defer src="main.js"></script></head><h1>Landmarks demo</h1>
 
-<canvas id="threeCanvas">
+<canvas id="threeCanvas"></canvas>
 
-</canvas>
+<div id="uiContainer">
+  <div class="uiFlex">
+    <button id="hideButton">hide</button>
+    <div id="localizationStatusMarker"></div>
+  </div>
+  <div class="uiFlex">
+    <div>location</div>
+    <select name="location" selected="">
+      <option>finlyandsky</option>
+      <option>polytech</option>
+    </select>
+  </div>
+  <div class="uiFlex">
+    <div>
+      localization:
+    </div>
+    <button id="localizeButton">
+      pause
+    </button>
+  </div>
+</div>
