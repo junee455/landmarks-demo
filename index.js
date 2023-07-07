@@ -22,10 +22,10 @@ async function main() {
     } catch {
       console.log("failed to get slam");
     }
-    sleep(3000);
+    await sleep(3000);
   }
 }
 
-window.onload(() => {
+window.addEventListener("DOMContentLoaded", () => {
   main();
 })
