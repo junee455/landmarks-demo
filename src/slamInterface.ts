@@ -1,6 +1,6 @@
 import { mockData } from "./mockData";
 
-const IS_SAFARI =
+export const IS_SAFARI =
   /^((?!chrome|android).)*safari/i.test(navigator.userAgent) ||
   navigator.userAgent.toLowerCase().includes("iphone");
 
@@ -89,15 +89,15 @@ export function getIntrinsics(): Intrinsics {
   }
 }
 
-export function iosWriteSlam(pose: string) {
+function iosWriteSlam(pose: string) {
   iosPose = JSON.parse(pose) as Pose;
 }
 
-export function iosWriteIntrinsics(intrinsics: string) {
+function iosWriteIntrinsics(intrinsics: string) {
   iosIntrinsics = JSON.parse(intrinsics) as Intrinsics;
 }
 
-export function iosWriteEmbedData(embed: string) {
+function iosWriteEmbedData(embed: string) {
   iosEmbed = JSON.parse(embed) as EmbedData;
 }
 
