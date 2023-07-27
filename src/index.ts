@@ -7,14 +7,6 @@ import { constructRequestDataEmbed, environments, sendToVps } from "./vpsV3";
 
 import { v4 as uuidv4 } from "uuid";
 
-import {
-  getSlam,
-  getIntrinsics,
-  getEmbed,
-  Intrinsics,
-  EmbedData,
-} from "./slamInterface";
-
 import { initThree, ThreeContext } from "./initThree";
 
 import * as Helpers from "./helpers";
@@ -177,56 +169,14 @@ let currentUuid = "";
 let statusElement: HTMLDivElement;
 
 function onAnimate({ camera, deltaTime }: ThreeContext) {
-  try {
-    const slamVals = getSlam();
-
-    const quat = slamVals.quaternion;
-
-    slamTranslate.set(...slamVals.translation);
-    slamQuat.set(quat.x, quat.y, quat.z, quat.w);
-
-    camera.position.copy(initialCamPos);
-    camera.position.add(slamTranslate);
-
-    camera.quaternion.copy(initialCamRot);
-    camera.quaternion.multiply(slamQuat);
-
-    camera.updateMatrixWorld();
-    camera.updateMatrix();
-  } catch {
-    camera.rotation.set(0, 0.5, 0);
-    camera.position.set(100, 0, 100);
-  }
-}
-
-async function computeFov(camera: THREE.PerspectiveCamera) {
-  for (let i = 0; i < 10; i++) {
-    try {
-      const tempIntrinsics = getIntrinsics();
-      const fx = Math.min(tempIntrinsics.fx, tempIntrinsics.fy);
-      const fy = Math.max(tempIntrinsics.fx, tempIntrinsics.fy);
-
-      const width = Math.min(tempIntrinsics.height, tempIntrinsics.width);
-      const height = Math.max(tempIntrinsics.height, tempIntrinsics.width);
-
-      const fovY = (2 * Math.atan(height / (2 * fy)) * 180) / Math.PI;
-      const fovX = (2 * Math.atan(width / (2 * fx)) * 180) / Math.PI;
-
-      camera.fov = (fovY + fovX) / 2;
-      camera.updateProjectionMatrix();
-      return;
-    } catch {
-      await sleep(100);
-    }
-  }
+  camera.rotation.set(0, 0.5, 0);
+  camera.position.set(100, 0, 100);
 }
 
 window.addEventListener("DOMContentLoaded", async () => {
   const { scene, camera } = initThree("threeCanvas", onAnimate);
 
   statusElement = document.getElementById("animateStatus") as HTMLDivElement;
-
-  computeFov(camera);
 
   const target = new THREE.Object3D();
   scene.add(target);
@@ -276,158 +226,4 @@ window.addEventListener("DOMContentLoaded", async () => {
   const markerEl = document.getElementById("localizationStatusMarker");
 
   const localizationFrequency = 500;
-
-  async function vpsLoop() {
-    for (;;) {
-      if (shouldContinue) {
-        try {
-          let slamVals: EmbedData;
-          let intrinsics: Intrinsics;
-          for (let i = 0; i < 10; i++) {
-            try {
-              slamVals = getEmbed();
-              intrinsics = getIntrinsics();
-              if (slamVals && intrinsics) {
-                break;
-              }
-            } catch {
-              console.log("failed to get slam");
-            }
-          }
-          if (!slamVals || !intrinsics) {
-            await sleep(localizationFrequency);
-
-            throw new Error("metadata missing");
-          }
-
-          console.log(intrinsics);
-
-          const blob = slamVals.base64Vector;
-
-          const trackQuat = new THREE.Quaternion(
-            slamVals.pose.quaternion.x,
-            slamVals.pose.quaternion.y,
-            slamVals.pose.quaternion.z,
-            slamVals.pose.quaternion.w,
-          );
-
-          const trackEuler = new THREE.Euler().setFromQuaternion(
-            trackQuat,
-            "YXZ",
-          );
-
-          const trackPose = new THREE.Vector3(...slamVals.pose.translation);
-
-          let trackerPos = {
-            x: slamVals.pose.translation[0],
-            y: slamVals.pose.translation[1],
-            z: slamVals.pose.translation[2],
-            rx: THREE.MathUtils.radToDeg(trackEuler.x),
-            ry: THREE.MathUtils.radToDeg(trackEuler.y),
-            rz: THREE.MathUtils.radToDeg(trackEuler.z),
-          };
-
-          const formData = constructRequestDataEmbed(
-            blob,
-            {
-              ...intrinsics,
-              cx: Math.min(intrinsics.cx, intrinsics.cy),
-              cy: Math.max(intrinsics.cx, intrinsics.cy),
-              width: Math.min(intrinsics.height, intrinsics.width),
-              height: Math.max(intrinsics.height, intrinsics.width),
-            },
-            [currentLocation.location_id],
-            currentUuid,
-            trackerPos,
-          );
-
-          const vpsRes = (await sendToVps(formData, environments.stage)).data;
-
-          if (vpsRes.status === "done" && vpsRes.attributes) {
-            markerEl.style.backgroundColor = "green";
-
-            vpsPos.set(
-              vpsRes.attributes.vps_pose.x,
-              vpsRes.attributes.vps_pose.y,
-              vpsRes.attributes.vps_pose.z,
-            );
-
-            vpsRot.setFromEuler(
-              new THREE.Euler(
-                (vpsRes.attributes.vps_pose.rx / 180) * Math.PI,
-                (vpsRes.attributes.vps_pose.ry / 180) * Math.PI,
-                (vpsRes.attributes.vps_pose.rz / 180) * Math.PI,
-                "YXZ",
-              ),
-              true,
-            );
-
-            const actualCamPos = Helpers.correctPosition(
-              trackPose.toArray(),
-              vpsPos.toArray(),
-              camera.position.toArray(),
-            );
-
-            const actualCamRot = Helpers.correctAngle(
-              trackQuat,
-              vpsRot,
-              camera.quaternion,
-            );
-
-            const worldRigTransform = Helpers.getWorldRigTransform(
-              camera.position,
-              new THREE.Vector3(...actualCamPos),
-              camera.quaternion,
-              actualCamRot,
-            );
-
-            wordlRig.position.copy(worldRigTransform.position);
-            wordlRig.quaternion.copy(worldRigTransform.rotation);
-          } else {
-            markerEl.style.backgroundColor = "red";
-          }
-
-          console.log(vpsRes);
-        } catch (e) {
-          markerEl.style.backgroundColor = "yellow";
-
-          // const vpsPos = Mocks.polytechFront.attributes.vps_pose;
-          const vpsPos = Mocks.polytechRight.attributes.vps_pose;
-
-          const vpsQuat = new THREE.Quaternion();
-          vpsQuat.setFromEuler(
-            new THREE.Euler(
-              (vpsPos.rx / 180) * Math.PI,
-              (vpsPos.ry / 180) * Math.PI,
-              (vpsPos.rz / 180) * Math.PI,
-              "YXZ",
-            ),
-            true,
-          );
-
-          const worldRigTransform = Helpers.getWorldRigTransform(
-            camera.position,
-            new THREE.Vector3(vpsPos.x, vpsPos.y, vpsPos.z),
-            camera.quaternion,
-            vpsQuat,
-          );
-
-          wordlRig.position.copy(worldRigTransform.position);
-          wordlRig.quaternion.copy(worldRigTransform.rotation);
-
-          console.log(e);
-        }
-      }
-      await sleep(localizationFrequency);
-    }
-  }
-
-  vpsLoop();
-
-  try {
-    console.log(getIntrinsics());
-    console.log(getSlam());
-  } catch {
-    console.log("failed to get device metadata");
-  }
 });
